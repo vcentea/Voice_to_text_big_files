@@ -56,10 +56,12 @@ cache/
 # Transcription outputs
 *.srt
 *.vtt
-*.txt
 transcripts/
 outputs/
 results/
+
+# Allow requirements.txt but ignore other txt files in outputs
+!requirements.txt
 
 # Environment variables (contains sensitive tokens)
 .env
