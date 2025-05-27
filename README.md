@@ -181,14 +181,16 @@ Access API at: `http://localhost:5555`
 - **Python 3.8+** 
 - **Git** for version control
 - **FFmpeg** for audio processing
-- **CUDA 12.1+** and **cuDNN 8.9+** (optional, for GPU acceleration)
+- **CUDA 12.1+** and **cuDNN 8.9.7.29** (required for GPU acceleration)
 
 #### Hardware Recommendations:
 - **GPU**: NVIDIA RTX 3090 Ti or equivalent (12GB+ VRAM)
 - **RAM**: 16GB+ system memory
 - **Storage**: 10GB+ free space for models
 
-### Quick Installation
+### Detailed Installation Guide
+
+This guide includes solutions to common issues we encountered during setup.
 
 #### 1. Clone the Repository
 ```bash
@@ -196,9 +198,13 @@ git clone https://github.com/vcentea/Voice_to_text_big_files.git
 cd Voice_to_text_big_files
 ```
 
-#### 2. Create Virtual Environment
+#### 2. Create Virtual Environment (CRITICAL STEP)
 ```bash
-# Windows
+# Windows - Create in a dedicated location for better organization
+python -m venv E:\ENVs\transcribe
+E:\ENVs\transcribe\Scripts\activate
+
+# Alternative: Create in project folder
 python -m venv transcribe
 transcribe\Scripts\activate
 
@@ -207,16 +213,48 @@ python3 -m venv transcribe
 source transcribe/bin/activate
 ```
 
-#### 3. Install Dependencies
-```bash
-# Install Python packages
-pip install -r requirements.txt
+**⚠️ Important Virtual Environment Notes:**
+- Always activate your virtual environment before installing packages
+- Use a consistent virtual environment for all packages
+- If you see import errors, verify you're in the correct environment
 
-# For GPU support (optional but recommended)
+#### 3. Install Core Dependencies (SPECIFIC ORDER MATTERS)
+
+**Step 3a: Install PyTorch with CUDA Support FIRST**
+```bash
+# For CUDA 12.1 (REQUIRED for RTX 3090 Ti)
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Verify GPU detection
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+python -c "import torch; print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+```
+
+**Step 3b: Install cuDNN 8 (CRITICAL VERSION COMPATIBILITY)**
+```bash
+# Install EXACTLY this version - cuDNN 9 will NOT work with WhisperX
+pip install nvidia-cudnn-cu12==8.9.7.29
+pip install nvidia-cublas-cu12>=12.1.0
+
+# Verify installation
+python -c "import site; print([p for p in site.getsitepackages()])"
+```
+
+**Step 3c: Install python-dotenv (Required for .env file loading)**
+```bash
+pip install python-dotenv>=1.0.0
+```
+
+**Step 3d: Install WhisperX and Dependencies**
+```bash
+# Install all remaining packages
+pip install -r requirements.txt
 ```
 
 #### 4. Setup Environment Variables (.env file)
+
+**Critical for Speaker Diarization to Work**
+
 Create a `.env` file in the project root directory:
 
 **Method 1: Copy from example**
@@ -235,10 +273,11 @@ echo HF_TOKEN=your_huggingface_token_here > .env
 echo "HF_TOKEN=your_huggingface_token_here" > .env
 ```
 
-**Get your HuggingFace token:**
+**Get your HuggingFace token (REQUIRED STEPS):**
 1. Go to [HuggingFace Settings](https://huggingface.co/settings/tokens)
 2. Create a new token with **read** permissions
-3. **Important**: Accept the license for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+3. **CRITICAL**: Accept the license for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+4. **CRITICAL**: Accept the license for [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0)
 
 **Verify your .env file:**
 Your `.env` file should contain:
@@ -247,15 +286,22 @@ HF_TOKEN=hf_your_actual_token_here
 ```
 ⚠️ **Note**: Keep your token private and never commit the `.env` file to version control!
 
-#### 5. Install FFmpeg
+**Test .env loading:**
+```bash
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('Token loaded:', 'Yes' if os.getenv('HF_TOKEN') else 'No')"
+```
+
+#### 5. Install FFmpeg (Required for Audio Processing)
 
 **Windows:**
 ```bash
-# Using winget
+# Method 1: Using winget (recommended)
 winget install --id=Gyan.FFmpeg -e
 
-# Or download from https://ffmpeg.org/download.html
-# Add FFmpeg to your PATH environment variable
+# Method 2: Manual installation
+# 1. Download from https://ffmpeg.org/download.html
+# 2. Extract to C:\ffmpeg
+# 3. Add C:\ffmpeg\bin to your PATH environment variable
 ```
 
 **Linux (Ubuntu/Debian):**
@@ -270,138 +316,329 @@ sudo apt install ffmpeg
 brew install ffmpeg
 ```
 
-### Detailed Installation Steps
-
-#### Python Virtual Environment Setup
-
-**Why use a virtual environment?**
-- Isolates project dependencies
-- Prevents conflicts with system packages
-- Makes deployment reproducible
-
-**Creating and managing the environment:**
+**Verify FFmpeg installation:**
 ```bash
-# Create virtual environment
-python -m venv transcribe
-
-# Activate (Windows)
-transcribe\Scripts\activate
-
-# Activate (Linux/macOS)
-source transcribe/bin/activate
-
-# Verify activation (should show transcribe in prompt)
-which python  # Should point to transcribe/bin/python
-
-# Deactivate when done
-deactivate
+ffmpeg -version
 ```
 
-#### GPU Setup (Optional but Recommended)
+#### 6. Critical cuDNN Setup (GPU-Only Mode)
 
-**CUDA Installation:**
-1. Download [CUDA Toolkit 12.1+](https://developer.nvidia.com/cuda-downloads)
-2. Install following NVIDIA's instructions
-3. Verify installation: `nvcc --version`
+**Why cuDNN 8 is Required:**
+- WhisperX and PyTorch are compiled for cuDNN 8
+- cuDNN 9 has different DLL names and will cause "cudnn_ops_infer64_8.dll not found" errors
+- Our scripts automatically add cuDNN paths to system PATH
 
-**cuDNN Setup:**
-1. Download [cuDNN 8.9+](https://developer.nvidia.com/cudnn)
-2. Extract and copy files to CUDA directory
-3. Verify with: `python -c "import torch; print(torch.cuda.is_available())"`
-
-**PyTorch GPU Installation:**
+**Verify cuDNN Installation:**
 ```bash
-# For CUDA 12.1
+# Check if cuDNN 8 DLLs exist (Windows)
+dir "E:\ENVs\transcribe\Lib\site-packages\nvidia\cudnn\bin\cudnn_ops_infer64_8.dll"
+
+# Or check your specific virtual environment path
+python -c "import site; print(site.getsitepackages()[0] + '\\nvidia\\cudnn\\bin')"
+```
+
+#### 7. Verification Steps
+
+**Test 1: GPU and CUDA**
+```bash
+python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+python -c "import torch; print(f'CUDA version: {torch.version.cuda}')"
+python -c "import torch; print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')"
+```
+
+**Expected Output:**
+```
+PyTorch version: 2.5.1+cu121
+CUDA available: True
+CUDA version: 12.1
+GPU: NVIDIA GeForce RTX 3090 Ti
+```
+
+**Test 2: Environment Variables**
+```bash
+python transcribe_whisperx.py
+```
+
+**Expected Output:**
+```
+✅ Environment variables loaded from .env file
+✅ HF_TOKEN found in .env: hf_tsxOCcW...
+✅ cuDNN verification successful
+🚀 GPU-ONLY MODE ENABLED
+✅ Using GPU: NVIDIA GeForce RTX 3090 Ti
+✅ GPU Memory: 24.0 GB
+```
+
+**Test 3: Full Transcription Test**
+```bash
+# Test with a short audio file
+python transcribe_whisperx.py test_audio.wav output.srt --language en
+```
+
+### Common Issues and Solutions
+
+#### Issue 1: "Could not locate cudnn_ops_infer64_8.dll"
+
+**Cause:** Wrong cuDNN version installed (version 9 instead of 8)
+
+**Solution:**
+```bash
+# Uninstall cuDNN 9
+pip uninstall nvidia-cudnn-cu12
+
+# Install cuDNN 8 specifically
+pip install nvidia-cudnn-cu12==8.9.7.29
+
+# Verify the correct DLLs exist
+python -c "import os, site; print(os.path.exists(site.getsitepackages()[0] + '\\nvidia\\cudnn\\bin\\cudnn_ops_infer64_8.dll'))"
+```
+
+#### Issue 2: "python-dotenv not installed"
+
+**Cause:** Missing package for .env file loading
+
+**Solution:**
+```bash
+pip install python-dotenv>=1.0.0
+```
+
+#### Issue 3: "HF_TOKEN not found"
+
+**Cause:** Missing or incorrect .env file setup
+
+**Solution:**
+1. Create `.env` file in project root
+2. Add `HF_TOKEN=your_token_here` (no quotes)
+3. Accept HuggingFace model licenses
+4. Test: `python -c "from dotenv import load_dotenv; import os; load_dotenv(); print(os.getenv('HF_TOKEN')[:10] if os.getenv('HF_TOKEN') else 'NOT_FOUND')"`
+
+#### Issue 4: "GPU not available" or "CUDA not available"
+
+**Cause:** PyTorch installed without CUDA support
+
+**Solution:**
+```bash
+# Uninstall CPU-only PyTorch
+pip uninstall torch torchaudio
+
+# Install CUDA-enabled PyTorch
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+#### Issue 5: "Model loading fails" or "Import errors"
+
+**Cause:** Virtual environment issues or missing dependencies
+
+**Solution:**
+```bash
+# Ensure you're in the correct virtual environment
+which python  # Should point to your virtual environment
+
+# Reinstall all requirements
+pip install --force-reinstall -r requirements.txt
+```
+
+#### Issue 6: "FFmpeg not found"
+
+**Cause:** FFmpeg not installed or not in PATH
+
+**Solution:**
+```bash
+# Windows: Download and add to PATH, or use winget
+winget install --id=Gyan.FFmpeg -e
+
+# Test installation
+ffmpeg -version
+```
+
+### Performance Optimization for RTX 3090 Ti
+
+**Optimal Settings (Already configured in scripts):**
+- **Batch Size**: 32 (auto-detected for 24GB VRAM)
+- **Compute Type**: float16 (maximum speed)
+- **Memory Usage**: 95% of GPU memory
+- **cuDNN Optimizations**: Enabled with TF32
+- **Flash Attention**: Enabled when available
+
+**Expected Performance:**
+- **Speed**: 80-100x real-time transcription
+- **Quality**: Superior accuracy with forced alignment
+- **Memory**: ~8-12GB VRAM usage for large-v3 model
+- **Processing**: ~1 hour audio processed in 30-60 seconds
+
+### Complete Installation Workflow (Recommended)
+
+Follow this exact sequence to avoid the issues we encountered:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/vcentea/Voice_to_text_big_files.git
+cd Voice_to_text_big_files
+
+# 2. Create virtual environment
+python -m venv E:\ENVs\transcribe  # or your preferred location
+E:\ENVs\transcribe\Scripts\activate
+
+# 3. Install PyTorch with CUDA FIRST
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# For CUDA 11.8 (if needed)
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+# 4. Install cuDNN 8 (EXACT VERSION)
+pip install nvidia-cudnn-cu12==8.9.7.29
+pip install nvidia-cublas-cu12>=12.1.0
 
-# Verify GPU detection
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+# 5. Install python-dotenv
+pip install python-dotenv>=1.0.0
+
+# 6. Install all other requirements
+pip install -r requirements.txt
+
+# 7. Create .env file
+echo HF_TOKEN=your_huggingface_token_here > .env
+
+# 8. Install FFmpeg (Windows)
+winget install --id=Gyan.FFmpeg -e
+
+# 9. Test installation
+python transcribe_whisperx.py
 ```
 
-### Installation Dependencies
+### Installation Verification Checklist
 
-#### Core Python Packages:
-```
-torch>=2.0.0
-torchaudio>=2.0.0
-whisper-openai
-faster-whisper
-fastapi
-uvicorn
-pydantic
-numpy
-librosa
-soundfile
-scipy
-noisereduce
-pyannote.audio
-python-dotenv
-```
+Run these commands to verify everything is working:
 
-#### System Dependencies:
-- **FFmpeg**: Audio/video processing
-- **CUDA Toolkit**: GPU acceleration
-- **cuDNN**: Deep learning GPU acceleration
-
-### Verification
-
-Test your installation:
+**✅ Step 1: Virtual Environment**
 ```bash
-# Test basic functionality
-python -c "import whisper; print('Whisper OK')"
-python -c "import torch; print(f'PyTorch OK, CUDA: {torch.cuda.is_available()}')"
-
-# Test transcription (CPU mode)
-python transcribe_enhanced.py sample_audio.wav --cpu
-
-# Test web server
-python whisper_server.py
-# Visit http://localhost:5555/health
+python -c "import sys; print('Python path:', sys.executable)"
+# Should point to your virtual environment
 ```
 
-### Troubleshooting Installation
-
-#### Common Issues:
-
-**1. Python version conflicts:**
+**✅ Step 2: PyTorch and CUDA**
 ```bash
-# Use specific Python version
-python3.9 -m venv transcribe
+python -c "import torch; print('PyTorch version:', torch.__version__)"
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+python -c "import torch; print('GPU name:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None')"
 ```
 
-**2. CUDA not detected:**
+**✅ Step 3: cuDNN 8 Verification**
 ```bash
-# Reinstall PyTorch with correct CUDA version
+python -c "import os, site; cudnn_path = site.getsitepackages()[0] + '\\nvidia\\cudnn\\bin\\cudnn_ops_infer64_8.dll'; print('cuDNN 8 DLL exists:', os.path.exists(cudnn_path))"
+```
+
+**✅ Step 4: Environment Variables**
+```bash
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('HF_TOKEN loaded:', 'Yes' if os.getenv('HF_TOKEN') else 'No')"
+```
+
+**✅ Step 5: WhisperX Import Test**
+```bash
+python -c "import whisperx; print('WhisperX import: OK')"
+```
+
+**✅ Step 6: FFmpeg Test**
+```bash
+ffmpeg -version
+```
+
+**✅ Step 7: Full System Test**
+```bash
+python transcribe_whisperx.py
+# Should show GPU detection and no errors
+```
+
+### Troubleshooting Guide
+
+#### Problem: "Could not locate cudnn_ops_infer64_8.dll"
+
+**Diagnosis:**
+```bash
+# Check current cuDNN version
+pip list | findstr cudnn
+# If it shows version 9.x, that's the problem
+```
+
+**Solution:**
+```bash
+pip uninstall nvidia-cudnn-cu12
+pip install nvidia-cudnn-cu12==8.9.7.29
+```
+
+#### Problem: "python-dotenv not installed"
+
+**Solution:**
+```bash
+pip install python-dotenv>=1.0.0
+```
+
+#### Problem: "HF_TOKEN not found"
+
+**Diagnosis:**
+```bash
+python -c "import os; print('.env file exists:', os.path.exists('.env'))"
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('Token value:', os.getenv('HF_TOKEN', 'NOT_FOUND')[:15])"
+```
+
+**Solution:**
+1. Create `.env` file in project root
+2. Add `HF_TOKEN=hf_your_token_here` (no quotes)
+3. Accept licenses at: https://huggingface.co/pyannote/speaker-diarization-3.1
+
+#### Problem: "CUDA not available"
+
+**Diagnosis:**
+```bash
+python -c "import torch; print('PyTorch CUDA built:', torch.version.cuda)"
+python -c "import torch; print('GPU detected:', torch.cuda.is_available())"
+```
+
+**Solution:**
+```bash
 pip uninstall torch torchaudio
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-**3. FFmpeg not found:**
+#### Problem: "FFmpeg not found"
+
+**Solution (Windows):**
 ```bash
-# Windows: Add to PATH or place in project folder
-# Linux: sudo apt install ffmpeg
-# macOS: brew install ffmpeg
+winget install --id=Gyan.FFmpeg -e
+# Or manually download and add to PATH
 ```
 
-**4. cuDNN errors:**
+#### Problem: Virtual Environment Issues
+
+**Solution:**
 ```bash
-# Use CPU fallback
-python transcribe_enhanced.py audio.wav --cpu
+# Deactivate current environment
+deactivate
+
+# Remove old environment
+rmdir /s "path_to_your_venv"
+
+# Start fresh
+python -m venv E:\ENVs\transcribe_fresh
+E:\ENVs\transcribe_fresh\Scripts\activate
+
+# Follow installation workflow again
 ```
 
-**5. HuggingFace token issues:**
-- Ensure token has read permissions
-- Accept pyannote model license
-- Check .env file format (no quotes needed)
+### Post-Installation Notes
 
-#### Getting Help:
-- Check system requirements match your setup
-- Verify all dependencies are installed
-- Use CPU mode if GPU issues persist
-- Check GitHub issues for similar problems
+**For RTX 3090 Ti Users:**
+- The script automatically detects your GPU and optimizes settings
+- Expect 80-100x real-time transcription speed
+- ~8-12GB VRAM usage for large-v3 model
+- Batch size automatically set to 32 for maximum performance
+
+**Memory Management:**
+- The script uses 95% of GPU memory for maximum performance
+- If you encounter OOM errors, the script will automatically fallback
+- Monitor GPU usage with `nvidia-smi` during processing
+
+**Quality Settings:**
+- WhisperX provides superior accuracy vs standard Whisper
+- Forced alignment gives precise word-level timestamps
+- Speaker diarization requires HF_TOKEN and license acceptance
 
 ---
 

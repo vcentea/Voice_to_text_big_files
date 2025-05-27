@@ -161,6 +161,48 @@ MAX_REPETITION_RATIO = 0.3    # Auto-clean repetitive content
 
 ## Troubleshooting
 
+### Installation Issues We Solved
+
+#### Issue 1: cuDNN DLL Not Found
+**Error:** `Could not locate cudnn_ops_infer64_8.dll`
+
+**Root Cause:** WhisperX requires cuDNN 8, but we initially installed cuDNN 9
+
+**Solution Applied:**
+```bash
+# Uninstall cuDNN 9
+pip uninstall nvidia-cudnn-cu12
+
+# Install cuDNN 8 specifically  
+pip install nvidia-cudnn-cu12==8.9.7.29
+
+# Verify installation
+python -c "import os, site; print(os.path.exists(site.getsitepackages()[0] + '\\nvidia\\cudnn\\bin\\cudnn_ops_infer64_8.dll'))"
+```
+
+#### Issue 2: Environment Variables Not Loading
+**Error:** `python-dotenv not installed` or `HF_TOKEN not found`
+
+**Solution Applied:**
+```bash
+# Install python-dotenv first
+pip install python-dotenv>=1.0.0
+
+# Create proper .env file (no quotes around token)
+echo HF_TOKEN=hf_your_token_here > .env
+
+# Test loading
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('Success' if os.getenv('HF_TOKEN') else 'Failed')"
+```
+
+#### Issue 3: PATH Configuration for cuDNN
+**Problem:** Even with cuDNN installed, DLLs not found during runtime
+
+**Solution Applied:**
+- Enhanced `setup_environment()` function to automatically add cuDNN paths
+- Added detection for multiple cuDNN installation locations
+- Included fallback cuDNN configuration
+
 ### If Quality Issues Persist
 1. **Check audio format** - Use WAV or FLAC when possible
 2. **Verify HF_TOKEN in .env file** - Ensure proper speaker diarization setup
@@ -172,14 +214,17 @@ MAX_REPETITION_RATIO = 0.3    # Auto-clean repetitive content
 
 ### Common Fixes
 ```bash
-# Force CPU if GPU issues
-python transcribe_whisperx.py audio.wav --compute_type int8
+# Test cuDNN installation
+python -c "import torch; x = torch.randn(1,1,1,1, device='cuda'); torch.nn.functional.conv2d(x, torch.randn(1,1,1,1, device='cuda')); print('cuDNN OK')"
 
-# Reduce batch size for memory issues  
-# Edit BATCH_SIZE_GPU in script to 8 or 4
+# Verify GPU detection
+python transcribe_whisperx.py  # Should show RTX 3090 Ti detection
 
-# Check repetition cleaning
-# Review console output for quality metrics
+# Check environment loading
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print('HF_TOKEN loaded:', bool(os.getenv('HF_TOKEN')))"
+
+# Full system test
+python transcribe_whisperx.py sample.wav output.srt --language en
 ```
 
 ## Expected Results
