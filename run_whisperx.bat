@@ -1,6 +1,7 @@
 @echo off
 echo ========================================
 echo HIGH-QUALITY WHISPERX TRANSCRIPTION
+echo GPU-ONLY MODE - RTX 3090 Ti OPTIMIZED
 echo ========================================
 echo.
 
@@ -31,7 +32,8 @@ REM Default output file if not provided
 if "%OUTPUT_FILE%"=="" set OUTPUT_FILE=whisperx_output.srt
 
 REM Run WhisperX transcription
-echo Running WhisperX transcription...
+echo Running WhisperX transcription in GPU-ONLY mode...
+echo Optimized for RTX 3090 Ti with maximum performance
 echo Input: %AUDIO_FILE%
 echo Output: %OUTPUT_FILE%
 if not "%LANGUAGE%"=="" echo Language: %LANGUAGE%

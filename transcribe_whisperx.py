@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-HIGH-QUALITY WhisperX Transcription with Speaker Diarization
+HIGH-QUALITY WhisperX Transcription with Speaker Diarization (GPU-ONLY)
 Features:
 - WhisperX for superior accuracy and word-level timestamps
 - Forced phoneme alignment for precise timing
 - Advanced speaker diarization integration
 - VAD preprocessing to reduce hallucinations
-- Batched inference for speed
+- Batched inference for maximum speed
 - Quality validation and error detection
+- GPU-only mode optimized for RTX 3090 Ti
+- Aggressive CUDA optimizations for maximum performance
 """
 
 import whisperx
@@ -51,13 +53,11 @@ def load_environment_variables():
 # Load environment variables at startup
 load_environment_variables()
 
-# Constants for quality optimization
-BATCH_SIZE_GPU = 16  # Optimal for RTX 3090 Ti
-BATCH_SIZE_CPU = 4   # Conservative for CPU
+# Constants for RTX 3090 Ti optimization
+BATCH_SIZE_GPU = 24  # Optimized for RTX 3090 Ti (24GB VRAM)
 MIN_SEGMENT_LENGTH = 0.5  # Minimum segment length to avoid zero-duration
 MAX_REPETITION_RATIO = 0.3  # Maximum allowed repetition ratio
-COMPUTE_TYPE_GPU = "float16"  # Optimal for modern GPUs
-COMPUTE_TYPE_CPU = "int8"     # Efficient for CPU
+COMPUTE_TYPE_GPU = "float16"  # Optimal for RTX 3090 Ti
 
 def setup_environment():
     """Setup optimal environment for WhisperX"""
@@ -76,12 +76,22 @@ def setup_environment():
     warnings.filterwarnings("ignore", message=".*TensorFloat-32.*")
     warnings.filterwarnings("ignore", category=UserWarning, module="whisperx")
     
-    # Optimize CUDA if available
+    # Aggressive CUDA optimizations for RTX 3090 Ti
     if torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
-        print("🚀 CUDA optimizations enabled")
+        torch.backends.cudnn.deterministic = False  # Maximum performance
+        torch.backends.cuda.enable_flash_sdp(True)  # Flash attention if available
+        
+        # Set memory fraction to use most of GPU memory
+        torch.cuda.set_per_process_memory_fraction(0.95)
+        
+        print("🚀 Aggressive CUDA optimizations enabled for RTX 3090 Ti")
+        print("💎 Maximum performance mode activated")
+    else:
+        print("❌ CUDA not available - GPU-only mode requires CUDA!")
+        sys.exit(1)
 
 def setup_ffmpeg():
     """Setup FFmpeg path"""
@@ -94,31 +104,40 @@ def setup_ffmpeg():
             print(f"🔧 Added FFmpeg to PATH: {ffmpeg_dir}")
 
 def get_device_config():
-    """Get optimal device configuration"""
-    if torch.cuda.is_available():
-        device = "cuda"
-        compute_type = COMPUTE_TYPE_GPU
-        batch_size = BATCH_SIZE_GPU
-        
-        gpu_name = torch.cuda.get_device_name(0)
-        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        
-        print(f"✅ Using GPU: {gpu_name}")
-        print(f"✅ GPU Memory: {gpu_memory:.1f} GB")
-        print(f"✅ Compute Type: {compute_type}")
-        print(f"✅ Batch Size: {batch_size}")
-        
-        return device, compute_type, batch_size
-    else:
-        device = "cpu"
-        compute_type = COMPUTE_TYPE_CPU
-        batch_size = BATCH_SIZE_CPU
-        
-        print(f"🔧 Using CPU (GPU not available)")
-        print(f"✅ Compute Type: {compute_type}")
-        print(f"✅ Batch Size: {batch_size}")
-        
-        return device, compute_type, batch_size
+    """Get GPU-only device configuration optimized for RTX 3090 Ti"""
+    if not torch.cuda.is_available():
+        print("❌ CUDA GPU not available!")
+        print("💡 This script requires GPU acceleration.")
+        print("🔧 Please check:")
+        print("   - NVIDIA drivers are installed")
+        print("   - CUDA toolkit is installed")
+        print("   - PyTorch with CUDA support is installed")
+        print("   - GPU is not being used by other processes")
+        sys.exit(1)
+    
+    device = "cuda"
+    compute_type = COMPUTE_TYPE_GPU
+    batch_size = BATCH_SIZE_GPU
+    
+    gpu_name = torch.cuda.get_device_name(0)
+    gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+    
+    print(f"🚀 GPU-ONLY MODE ENABLED")
+    print(f"✅ Using GPU: {gpu_name}")
+    print(f"✅ GPU Memory: {gpu_memory:.1f} GB")
+    print(f"✅ Compute Type: {compute_type}")
+    print(f"✅ Batch Size: {batch_size}")
+    
+    # Optimize specifically for RTX 3090 Ti
+    if "3090" in gpu_name:
+        print(f"🎯 RTX 3090 Ti detected - using optimized settings")
+        print(f"💎 Superior performance expected with {gpu_memory:.1f}GB VRAM")
+        # Increase batch size for 3090 Ti's massive VRAM
+        if gpu_memory > 20:  # RTX 3090 Ti has 24GB
+            batch_size = 32  # More aggressive batching
+            print(f"🚀 Increased batch size to {batch_size} for maximum speed")
+    
+    return device, compute_type, batch_size
 
 def convert_audio_if_needed(audio_file):
     """Convert audio to optimal format for WhisperX if needed"""
@@ -258,8 +277,7 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
         # Clean up model memory
         del model
         gc.collect()
-        if device == "cuda":
-            torch.cuda.empty_cache()
+        torch.cuda.empty_cache()  # Always clear CUDA cache in GPU-only mode
         
         # 4. Quality validation
         repetition_ratio, repetitive_indices = detect_repetitions(result['segments'])
@@ -294,8 +312,7 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
                 # Clean up alignment model
                 del model_a
                 gc.collect()
-                if device == "cuda":
-                    torch.cuda.empty_cache()
+                torch.cuda.empty_cache()  # Always clear CUDA cache in GPU-only mode
                     
             except Exception as e:
                 print(f"⚠️ Alignment failed: {e}")
@@ -429,6 +446,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python transcribe_whisperx.py <audio_file> [output_file] [--language code]")
         print("Example: python transcribe_whisperx.py audio.wav output.srt --language ro")
+        print("⚠️  GPU-ONLY MODE: Requires NVIDIA GPU with CUDA support")
+        print("🎯 Optimized for RTX 3090 Ti with 24GB VRAM")
         sys.exit(1)
     
     audio_file = sys.argv[1]
@@ -443,6 +462,7 @@ def main():
     
     print("🚀 HIGH-QUALITY WHISPERX Transcription + Speaker Diarization")
     print("🎯 Superior Accuracy with Forced Alignment")
+    print("💎 GPU-ONLY MODE - Optimized for RTX 3090 Ti")
     print("=" * 70)
     
     setup_environment()
