@@ -22,14 +22,34 @@ import subprocess
 from pathlib import Path
 
 # Load environment variables from .env file
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-    print("✅ Environment variables loaded from .env file")
-except ImportError:
-    print("⚠️ python-dotenv not installed. Install with: pip install python-dotenv")
-except Exception as e:
-    print(f"⚠️ Could not load .env file: {e}")
+def load_environment_variables():
+    """Load environment variables from .env file with proper error handling"""
+    try:
+        from dotenv import load_dotenv
+        env_file = Path(".env")
+        if env_file.exists():
+            load_dotenv()
+            print("✅ Environment variables loaded from .env file")
+            
+            # Verify HF_TOKEN is loaded
+            hf_token = os.getenv("HF_TOKEN")
+            if hf_token:
+                print(f"✅ HF_TOKEN found in .env: {hf_token[:10]}...")
+            else:
+                print("⚠️ HF_TOKEN not found in .env file")
+                print("💡 Please add your HuggingFace token to .env file:")
+                print("   HF_TOKEN=your_token_here")
+        else:
+            print("⚠️ .env file not found")
+            print("💡 Create .env file with your HuggingFace token:")
+            print("   HF_TOKEN=your_token_here")
+    except ImportError:
+        print("⚠️ python-dotenv not installed. Install with: pip install python-dotenv")
+    except Exception as e:
+        print(f"⚠️ Could not load .env file: {e}")
+
+# Load environment variables at startup
+load_environment_variables()
 
 # Constants for quality optimization
 BATCH_SIZE_GPU = 16  # Optimal for RTX 3090 Ti
@@ -303,8 +323,11 @@ def perform_speaker_diarization_whisperx(audio_file, device):
         
         hf_token = os.getenv("HF_TOKEN")
         if not hf_token:
-            print("⚠️ HF_TOKEN not found - speaker diarization disabled")
+            print("⚠️ HF_TOKEN not found in .env file - speaker diarization disabled")
+            print("💡 Add your HuggingFace token to .env file to enable speaker diarization")
             return None
+        
+        print(f"✅ Using HF_TOKEN from .env file: {hf_token[:10]}...")
         
         start_time = time.time()
         
@@ -425,12 +448,18 @@ def main():
     setup_environment()
     setup_ffmpeg()
     
-    # Check HF token
+    # Check HF token from .env file
     hf_token = os.getenv("HF_TOKEN")
     if hf_token:
-        print(f"✅ HF_TOKEN available: {hf_token[:10]}...")
+        print(f"✅ HF_TOKEN loaded from .env: {hf_token[:10]}...")
+        print("✅ Speaker diarization will be enabled")
     else:
-        print("⚠️ HF_TOKEN not found - speaker diarization will be disabled")
+        print("⚠️ HF_TOKEN not found in .env file")
+        print("⚠️ Speaker diarization will be disabled")
+        print("💡 To enable speaker diarization:")
+        print("   1. Get token from: https://huggingface.co/settings/tokens")
+        print("   2. Accept license: https://huggingface.co/pyannote/speaker-diarization-3.1")
+        print("   3. Add to .env file: HF_TOKEN=your_token_here")
     
     # Check if audio file exists
     if not os.path.exists(audio_file):

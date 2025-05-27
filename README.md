@@ -216,8 +216,17 @@ pip install -r requirements.txt
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-#### 4. Setup Environment Variables
-Create a `.env` file in the project root:
+#### 4. Setup Environment Variables (.env file)
+Create a `.env` file in the project root directory:
+
+**Method 1: Copy from example**
+```bash
+# Copy the example file
+copy .env.example .env
+# Then edit .env and replace 'your_huggingface_token_here' with your actual token
+```
+
+**Method 2: Create manually**
 ```bash
 # Windows
 echo HF_TOKEN=your_huggingface_token_here > .env
@@ -228,8 +237,15 @@ echo "HF_TOKEN=your_huggingface_token_here" > .env
 
 **Get your HuggingFace token:**
 1. Go to [HuggingFace Settings](https://huggingface.co/settings/tokens)
-2. Create a new token with read permissions
-3. Accept the license for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+2. Create a new token with **read** permissions
+3. **Important**: Accept the license for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+
+**Verify your .env file:**
+Your `.env` file should contain:
+```
+HF_TOKEN=hf_your_actual_token_here
+```
+⚠️ **Note**: Keep your token private and never commit the `.env` file to version control!
 
 #### 5. Install FFmpeg
 

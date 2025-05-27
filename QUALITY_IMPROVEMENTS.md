@@ -163,7 +163,10 @@ MAX_REPETITION_RATIO = 0.3    # Auto-clean repetitive content
 
 ### If Quality Issues Persist
 1. **Check audio format** - Use WAV or FLAC when possible
-2. **Verify HF_TOKEN** - Ensure proper speaker diarization setup
+2. **Verify HF_TOKEN in .env file** - Ensure proper speaker diarization setup
+   - Check that `.env` file exists in project root
+   - Verify `HF_TOKEN=your_token_here` is properly set
+   - Ensure you accepted the pyannote model license
 3. **Monitor GPU memory** - Reduce batch size if needed
 4. **Review language setting** - Specify language for better accuracy
 
