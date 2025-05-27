@@ -1,0 +1,150 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+transcribe/
+.venv/
+
+# PyTorch and ML models (LARGE FILES)
+models/
+*.pth
+*.pt
+*.bin
+*.safetensors
+checkpoints/
+cache/
+.cache/
+
+# Audio files (can be large)
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.aac
+*.ogg
+*.wma
+*.mp4
+*.avi
+*.mkv
+*.mov
+
+# Transcription outputs
+*.srt
+*.vtt
+*.txt
+transcripts/
+outputs/
+results/
+
+# Environment variables (contains sensitive tokens)
+.env
+.env.local
+.env.*.local
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# CUDA and GPU specific
+*.cu
+*.cuh
+
+# Windows specific
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux specific
+*~
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Large test files
+test_audio/
+samples/
+demo_files/
+
+# Model downloads and caches
+transformers_cache/
+huggingface_hub/
+torch_cache/
+.transformers/
+
+# FFmpeg temporary files
+ffmpeg_*
+*.ffmpeg
+
+# Documentation builds
+docs/_build/
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json 
