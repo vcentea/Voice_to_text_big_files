@@ -6,6 +6,7 @@ numpy>=1.21.0
 # Whisper implementations
 openai-whisper>=20231117
 faster-whisper>=0.10.0
+whisperx>=3.1.0
 
 # FastAPI and Web Server
 fastapi>=0.104.0

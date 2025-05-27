@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Audio Transcription System - Carousel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+        }
+        
+        .carousel-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .slide {
+            background: white;
+            min-height: 600px;
+            padding: 60px;
+            margin: 20px 0;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            page-break-after: always;
+        }
+        
+        .slide h1 {
+            font-size: 3em;
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 300;
+        }
+        
+        .slide h2 {
+            font-size: 2.2em;
+            color: #34495e;
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 400;
+        }
+        
+        .slide h3 {
+            font-size: 1.8em;
+            color: #2980b9;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        
+        .hero-slide {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .hero-slide h1 {
+            color: white;
+            font-size: 3.5em;
+            margin-bottom: 20px;
+        }
+        
+        .hero-slide .subtitle {
+            font-size: 1.4em;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+        
+        .hero-slide .company {
+            font-size: 1.2em;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+        
+        .overview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        
+        .overview-text {
+            font-size: 1.2em;
+            line-height: 1.8;
+            color: #444;
+        }
+        
+        .key-points {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            border-left: 5px solid #3498db;
+        }
+        
+        .key-points ul {
+            list-style: none;
+        }
+        
+        .key-points li {
+            margin: 15px 0;
+            font-size: 1.1em;
+            color: #555;
+        }
+        
+        .key-points li:before {
+            content: "⚡";
+            margin-right: 10px;
+        }
+        
+        .architecture-flow {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .flow-stage {
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            min-width: 140px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        
+        .flow-stage h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+        
+        .flow-stage p {
+            font-size: 0.85em;
+            color: #666;
+            margin: 0;
+        }
+        
+        .input-stage { background: linear-gradient(145deg, #e8f5e8, #d0f0d0); border-color: #27ae60; }
+        .process-stage { background: linear-gradient(145deg, #fff3e0, #ffe0b3); border-color: #f39c12; }
+        .ai-stage { background: linear-gradient(145deg, #e3f2fd, #bbdefb); border-color: #2196f3; }
+        .output-stage { background: linear-gradient(145deg, #f3e5f5, #e1bee7); border-color: #9c27b0; }
+        
+        .flow-arrow {
+            font-size: 1.5em;
+            color: #3498db;
+            font-weight: bold;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            border: 2px solid #dee2e6;
+        }
+        
+        .metric-number {
+            font-size: 3em;
+            font-weight: bold;
+            color: #2980b9;
+            margin-bottom: 10px;
+        }
+        
+        .metric-label {
+            font-size: 1.3em;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .metric-desc {
+            color: #666;
+            font-size: 0.95em;
+        }
+        
+        .use-cases-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 25px;
+            margin-top: 20px;
+        }
+        
+        .use-case {
+            background: white;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        }
+        
+        .use-case-icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+        
+        .use-case h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+        
+        .use-case p {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        .tech-highlights {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+        
+        .tech-highlights h4 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            text-align: center;
+        }
+        
+        .tech-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .tech-item {
+            display: flex;
+            align-items: center;
+            font-size: 1em;
+            color: #555;
+        }
+        
+        .tech-item:before {
+            content: "🔧";
+            margin-right: 10px;
+        }
+        
+        @media print {
+            .slide {
+                margin: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="carousel-container">
+        
+        <!-- Slide 1: Hero -->
+        <div class="slide hero-slide">
+            <h1>🎙️ Enhanced Audio Transcription System</h1>
+            <div class="subtitle">Advanced Speech-to-Text Pipeline with Speaker Identification</div>
+            <div class="company">ainnovate.tech </div>
+        </div>
+        
+        <!-- Slide 2: Overview -->
+        <div class="slide">
+            <h2>Enterprise-Grade Audio Processing</h2>
+            <div class="overview-grid">
+                <div class="overview-text">
+                    Built an advanced transcription system that processes long-form audio with enterprise-level accuracy. The pipeline combines OpenAI's Whisper models with intelligent preprocessing and automatic speaker diarization.
+                </div>
+                <div class="key-points">
+                    <ul>
+                        <li>10-15x real-time processing speed</li>
+                        <li>95%+ transcription accuracy</li>
+                        <li>Automatic speaker identification</li>
+                        <li>GPU-accelerated with smart fallback</li>
+                        <li>Professional SRT output format</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 3: Architecture -->
+        <div class="slide">
+            <h2>System Architecture</h2>
+            <div class="architecture-flow">
+                <div class="flow-stage input-stage">
+                    <h4>Raw Audio</h4>
+                    <p>Any format<br>Multi-channel</p>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-stage process-stage">
+                    <h4>Enhancement</h4>
+                    <p>Noise reduction<br>Normalization</p>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-stage ai-stage">
+                    <h4>Language Detection</h4>
+                    <p>Auto-detect<br>Confidence scoring</p>
+                </div>
+            </div>
+            <div class="architecture-flow">
+                <div class="flow-stage ai-stage">
+                    <h4>Whisper Transcription</h4>
+                    <p>Large-v3 model<br>GPU accelerated</p>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-stage process-stage">
+                    <h4>Speaker Diarization</h4>
+                    <p>pyannote.audio<br>Voice separation</p>
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-stage output-stage">
+                    <h4>Professional SRT</h4>
+                    <p>Speaker IDs<br>Precise timing</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 4: Performance Metrics -->
+        <div class="slide">
+            <h2>Performance Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-number">10-15x</div>
+                    <div class="metric-label">Real-time Speed</div>
+                    <div class="metric-desc">GPU acceleration on RTX 3090 Ti</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">95%+</div>
+                    <div class="metric-label">Accuracy</div>
+                    <div class="metric-desc">Enhanced preprocessing quality</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">8GB</div>
+                    <div class="metric-label">VRAM Usage</div>
+                    <div class="metric-desc">Large-v3 model memory</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">Auto</div>
+                    <div class="metric-label">CPU Fallback</div>
+                    <div class="metric-desc">Works without GPU</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 5: Use Cases -->
+        <div class="slide">
+            <h2>Use Cases & Applications</h2>
+            <div class="use-cases-grid">
+                <div class="use-case">
+                    <div class="use-case-icon">🎙️</div>
+                    <h4>Podcasts</h4>
+                    <p>Multi-speaker transcription with automatic speaker identification</p>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">💼</div>
+                    <h4>Meetings</h4>
+                    <p>Business transcription with participant tracking and timing</p>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">📹</div>
+                    <h4>Content Creation</h4>
+                    <p>Professional subtitle generation for video content</p>
+                </div>
+                <div class="use-case">
+                    <div class="use-case-icon">🔬</div>
+                    <h4>Research</h4>
+                    <p>Interview analysis with automated speaker segmentation</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 6: Technical Stack -->
+        <div class="slide">
+            <h2>Technical Implementation</h2>
+            <div class="tech-highlights">
+                <h4>Core Technologies</h4>
+                <div class="tech-list">
+                    <div class="tech-item">OpenAI Whisper Large-v3</div>
+                    <div class="tech-item">pyannote.audio Diarization</div>
+                    <div class="tech-item">CUDA GPU Acceleration</div>
+                    <div class="tech-item">Advanced Audio Preprocessing</div>
+                    <div class="tech-item">Intelligent Language Detection</div>
+                    <div class="tech-item">Professional SRT Generation</div>
+                    <div class="tech-item">Real-time Performance Monitoring</div>
+                    <div class="tech-item">Automatic CPU Fallback</div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 40px; color: #666; font-size: 1.1em;">
+                Perfect for enterprise audio processing workflows
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>
