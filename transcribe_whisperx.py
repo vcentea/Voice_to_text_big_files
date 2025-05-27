@@ -60,21 +60,57 @@ MAX_REPETITION_RATIO = 0.3  # Maximum allowed repetition ratio
 COMPUTE_TYPE_GPU = "float16"  # Optimal for RTX 3090 Ti
 
 def setup_environment():
-    """Setup optimal environment for WhisperX"""
-    # Set environment variables
+    """Setup comprehensive CUDA environment for WhisperX (based on enhanced script)"""
+    # Set CUDA environment variables
     os.environ["CUDA_PATH"] = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
     os.environ["CUDA_HOME"] = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9"
     
-    # Add CUDA to PATH
+    # Add CUDA bin and lib directories to PATH (fixes cuDNN DLL issues)
     cuda_bin = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\bin"
+    cuda_lib = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\lib\\x64"
+    
     current_path = os.environ.get("PATH", "")
+    
+    # Add CUDA bin to PATH
     if cuda_bin not in current_path:
         os.environ["PATH"] = f"{cuda_bin};{current_path}"
+        print(f"🔧 Added CUDA bin to PATH: {cuda_bin}")
+    
+    # Add CUDA lib to PATH (critical for cuDNN DLLs)
+    if cuda_lib not in current_path:
+        os.environ["PATH"] = f"{cuda_lib};{os.environ['PATH']}"
+        print(f"🔧 Added CUDA lib to PATH: {cuda_lib}")
+    
+    # Also check for cuDNN in alternative locations (including pip-installed cuDNN)
+    import site
+    site_packages = site.getsitepackages()[0] if site.getsitepackages() else ""
+    
+    potential_cudnn_paths = [
+        "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\bin",
+        "C:\\Program Files\\NVIDIA\\CUDNN\\v8.9\\bin",
+        "C:\\tools\\cuda\\bin",
+        "C:\\dev\\cuda\\bin",
+        f"{site_packages}\\nvidia\\cudnn\\bin" if site_packages else "",
+        f"{site_packages}\\nvidia\\cublas\\bin" if site_packages else "",
+        "E:\\ENVs\\robot\\Lib\\site-packages\\nvidia\\cudnn\\bin",  # Your specific env
+        "E:\\ENVs\\robot\\Lib\\site-packages\\nvidia\\cublas\\bin"
+    ]
+    
+    for cudnn_path in potential_cudnn_paths:
+        if cudnn_path and os.path.exists(cudnn_path) and cudnn_path not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{cudnn_path};{os.environ['PATH']}"
+            print(f"🔧 Added cuDNN path: {cudnn_path}")
     
     # Suppress specific warnings but keep important ones
     warnings.filterwarnings("ignore", message=".*You have requested a HuggingFace token.*")
+    warnings.filterwarnings("ignore", message=".*Failed to launch Triton kernels.*")
+    warnings.filterwarnings("ignore", message=".*falling back to a slower.*")
     warnings.filterwarnings("ignore", message=".*TensorFloat-32.*")
     warnings.filterwarnings("ignore", category=UserWarning, module="whisperx")
+    warnings.filterwarnings("ignore", category=UserWarning, module="pyannote.audio.utils.reproducibility")
+    warnings.filterwarnings("ignore", message=".*std\\(\\): degrees of freedom is <= 0.*")
+    warnings.filterwarnings("ignore", message=".*PySoundFile failed.*")
+    warnings.filterwarnings("ignore", message=".*audioread.*")
     
     # Aggressive CUDA optimizations for RTX 3090 Ti
     if torch.cuda.is_available():
@@ -88,10 +124,34 @@ def setup_environment():
         torch.cuda.set_per_process_memory_fraction(0.95)
         
         print("🚀 Aggressive CUDA optimizations enabled for RTX 3090 Ti")
-        print("💎 Maximum performance mode activated")
+        print("💎 Maximum performance mode activated (including cuDNN)")
     else:
         print("❌ CUDA not available - GPU-only mode requires CUDA!")
         sys.exit(1)
+
+def verify_cudnn_availability():
+    """Verify cuDNN is properly available"""
+    try:
+        if torch.cuda.is_available():
+            # Test cuDNN availability
+            x = torch.randn(1, 1, 1, 1, device='cuda')
+            torch.nn.functional.conv2d(x, torch.randn(1, 1, 1, 1, device='cuda'))
+            print("✅ cuDNN verification successful")
+            return True
+    except Exception as e:
+        print(f"⚠️ cuDNN verification failed: {e}")
+        print("🔧 Attempting cuDNN fallback configuration...")
+        
+        # Try to disable cuDNN and use alternative backend
+        try:
+            torch.backends.cudnn.enabled = False
+            print("✅ Disabled cuDNN - using alternative CUDA backend")
+            print("⚠️ Performance may be slower but execution will continue")
+            return False
+        except:
+            print("❌ Could not configure cuDNN fallback")
+            return False
+    return False
 
 def setup_ffmpeg():
     """Setup FFmpeg path"""
@@ -467,6 +527,9 @@ def main():
     
     setup_environment()
     setup_ffmpeg()
+    
+    # Verify cuDNN is working properly
+    verify_cudnn_availability()
     
     # Check HF token from .env file
     hf_token = os.getenv("HF_TOKEN")
