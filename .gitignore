@@ -60,6 +60,37 @@ transcripts/
 outputs/
 results/
 
+# Processed output files from meeting analysis
+llm_corrected.txt
+output2_latest.txt
+output2_latest_before.txt
+whisperx_test.txt
+whisperx_test_improved.txt
+classic_output.txt
+final_cudnn_test.txt
+enhanced_fixed_*.txt
+
+# Meeting analysis results (JSON and DOCX outputs)
+summary.json
+summary_*.json
+summary.docx
+summary_*.docx
+*_final_meeting_report.docx
+*_final_phase*.json
+
+# TACTIQ and raw transcription files
+TACTIQ*.txt
+raw_transcription*.docx
+"raw transcription*.docx"
+
+# HTML report files
+*.html
+report html
+
+# Temporary Word files
+~$*.docx
+~$*.doc
+
 # Allow requirements.txt but ignore other txt files in outputs
 !requirements.txt
 

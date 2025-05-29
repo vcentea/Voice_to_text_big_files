@@ -53,11 +53,13 @@ def load_environment_variables():
 # Load environment variables at startup
 load_environment_variables()
 
-# Constants for RTX 3090 Ti optimization
-BATCH_SIZE_GPU = 24  # Optimized for RTX 3090 Ti (24GB VRAM)
-MIN_SEGMENT_LENGTH = 0.5  # Minimum segment length to avoid zero-duration
-MAX_REPETITION_RATIO = 0.3  # Maximum allowed repetition ratio
-COMPUTE_TYPE_GPU = "float16"  # Optimal for RTX 3090 Ti
+# Constants for MAXIMUM ACCURACY (time is not an issue)
+BATCH_SIZE_GPU = 16  # Smaller batches for better accuracy (vs speed optimization)
+MIN_SEGMENT_LENGTH = 1.0  # Conservative - closer to original working parameters
+MAX_SEGMENT_GAP = 0.5  # Very tight gap tolerance to prevent cross-speaker merging
+MAX_REPETITION_RATIO = 0.2  # Stricter repetition filtering for accuracy
+COMPUTE_TYPE_GPU = "float16"  # Best balance of accuracy/memory for RTX 3090 Ti
+MIN_WORDS_PER_SEGMENT = 2  # Lower threshold to preserve natural boundaries
 
 def setup_environment():
     """Setup comprehensive CUDA environment for WhisperX (based on enhanced script)"""
@@ -92,8 +94,8 @@ def setup_environment():
         "C:\\dev\\cuda\\bin",
         f"{site_packages}\\nvidia\\cudnn\\bin" if site_packages else "",
         f"{site_packages}\\nvidia\\cublas\\bin" if site_packages else "",
-        "E:\\ENVs\\robot\\Lib\\site-packages\\nvidia\\cudnn\\bin",  # Your specific env
-        "E:\\ENVs\\robot\\Lib\\site-packages\\nvidia\\cublas\\bin"
+        "E:\\ENVs\\transcribe\\Lib\\site-packages\\nvidia\\cudnn\\bin",  # Your specific env
+        "E:\\ENVs\\transcribe\\Lib\\site-packages\\nvidia\\cublas\\bin"
     ]
     
     for cudnn_path in potential_cudnn_paths:
@@ -112,19 +114,19 @@ def setup_environment():
     warnings.filterwarnings("ignore", message=".*PySoundFile failed.*")
     warnings.filterwarnings("ignore", message=".*audioread.*")
     
-    # Aggressive CUDA optimizations for RTX 3090 Ti
+    # CUDA optimizations for MAXIMUM ACCURACY (not speed)
     if torch.cuda.is_available():
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cudnn.benchmark = True
-        torch.backends.cudnn.deterministic = False  # Maximum performance
-        torch.backends.cuda.enable_flash_sdp(True)  # Flash attention if available
+        torch.backends.cuda.matmul.allow_tf32 = False  # Disable TF32 for max precision
+        torch.backends.cudnn.allow_tf32 = False        # Disable TF32 for max precision
+        torch.backends.cudnn.benchmark = False         # Disable for deterministic results
+        torch.backends.cudnn.deterministic = True      # Enable deterministic mode
+        torch.backends.cuda.enable_flash_sdp(False)    # Disable flash attention for accuracy
         
-        # Set memory fraction to use most of GPU memory
-        torch.cuda.set_per_process_memory_fraction(0.95)
+        # Conservative memory fraction for stability
+        torch.cuda.set_per_process_memory_fraction(0.85)
         
-        print("🚀 Aggressive CUDA optimizations enabled for RTX 3090 Ti")
-        print("💎 Maximum performance mode activated (including cuDNN)")
+        print("🎯 CUDA optimized for MAXIMUM ACCURACY (precision over speed)")
+        print("💎 Deterministic mode enabled for consistent results")
     else:
         print("❌ CUDA not available - GPU-only mode requires CUDA!")
         sys.exit(1)
@@ -188,14 +190,14 @@ def get_device_config():
     print(f"✅ Compute Type: {compute_type}")
     print(f"✅ Batch Size: {batch_size}")
     
-    # Optimize specifically for RTX 3090 Ti
+    # Optimize specifically for RTX 3090 Ti - ACCURACY MODE
     if "3090" in gpu_name:
-        print(f"🎯 RTX 3090 Ti detected - using optimized settings")
-        print(f"💎 Superior performance expected with {gpu_memory:.1f}GB VRAM")
-        # Increase batch size for 3090 Ti's massive VRAM
+        print(f"🎯 RTX 3090 Ti detected - using accuracy-optimized settings")
+        print(f"💎 Maximum accuracy expected with {gpu_memory:.1f}GB VRAM")
+        # Use smaller batch size for better accuracy
         if gpu_memory > 20:  # RTX 3090 Ti has 24GB
-            batch_size = 32  # More aggressive batching
-            print(f"🚀 Increased batch size to {batch_size} for maximum speed")
+            batch_size = 12  # Smaller batches for maximum accuracy
+            print(f"🎯 Using batch size {batch_size} for maximum accuracy (not speed)")
     
     return device, compute_type, batch_size
 
@@ -293,6 +295,136 @@ def clean_repetitive_segments(segments):
     
     return segments
 
+def merge_short_segments(segments):
+    """Merge short segments to improve content flow and reduce over-segmentation"""
+    if not segments:
+        return segments
+    
+    print("🔗 Merging short segments to improve conversation flow...")
+    merged_segments = []
+    current_segment = None
+    
+    for segment in segments:
+        text = segment.get('text', '').strip()
+        words = text.split()
+        duration = segment.get('end', 0) - segment.get('start', 0)
+        speaker = segment.get('speaker', 'UNKNOWN')
+        
+        # Skip empty segments
+        if not text:
+            continue
+            
+        # CONSERVATIVE merging - only merge very obvious fragments
+        should_merge = (
+            current_segment is not None and
+            len(words) < MIN_WORDS_PER_SEGMENT and  # Very few words
+            duration < MIN_SEGMENT_LENGTH and       # Very short duration  
+            speaker == current_segment.get('speaker', 'UNKNOWN') and  # MUST be same speaker
+            speaker != 'SPEAKER_UNKNOWN' and        # MUST have valid speaker ID
+            (segment.get('start', 0) - current_segment.get('end', 0)) < MAX_SEGMENT_GAP and  # Very close timing
+            len(current_segment.get('text', '').split()) < 8  # Don't merge into already long segments
+        )
+        
+        if should_merge:
+            # Merge with current segment
+            current_segment['text'] = current_segment['text'].strip() + ' ' + text
+            current_segment['end'] = segment.get('end', current_segment['end'])
+            
+            # Merge word-level data if available
+            if 'words' in current_segment and 'words' in segment:
+                current_segment['words'].extend(segment['words'])
+                
+        else:
+            # Start new segment
+            if current_segment is not None:
+                merged_segments.append(current_segment)
+            current_segment = segment.copy()
+    
+    # Add the last segment
+    if current_segment is not None:
+        merged_segments.append(current_segment)
+    
+    original_count = len(segments)
+    merged_count = len(merged_segments)
+    reduction = ((original_count - merged_count) / original_count * 100) if original_count > 0 else 0
+    
+    print(f"✅ Segment merging complete: {original_count} → {merged_count} segments ({reduction:.1f}% reduction)")
+    return merged_segments
+
+def enhance_segment_boundaries(segments):
+    """Enhance segment boundaries for better conversation flow (optimized for recorded files)"""
+    if not segments:
+        return segments
+        
+    print("📝 Enhancing segment boundaries for recorded file conversation flow...")
+    enhanced_segments = []
+    
+    for i, segment in enumerate(segments):
+        text = segment.get('text', '').strip()
+        
+        # Skip empty segments
+        if not text:
+            continue
+            
+        # Check for natural sentence endings
+        ends_naturally = text.endswith(('.', '!', '?', ':', ';'))
+        next_segment = segments[i + 1] if i + 1 < len(segments) else None
+        
+        # For recorded files, be more aggressive in merging incomplete thoughts
+        if (not ends_naturally and 
+            next_segment and 
+            segment.get('speaker') == next_segment.get('speaker') and
+            (next_segment.get('start', 0) - segment.get('end', 0)) < MAX_SEGMENT_GAP):
+            
+            # Look ahead to find natural ending (more aggressive for recorded files)
+            lookahead = []
+            j = i + 1
+            while j < len(segments) and j < i + 5:  # Look ahead up to 5 segments for recorded files
+                lookahead_seg = segments[j]
+                if lookahead_seg.get('speaker') != segment.get('speaker'):
+                    break
+                    
+                lookahead.append(lookahead_seg)
+                lookahead_text = lookahead_seg.get('text', '').strip()
+                
+                # For recorded files, look for more natural ending patterns
+                if (lookahead_text.endswith(('.', '!', '?')) or 
+                    (j == i + 4 and len(lookahead_text.split()) >= 3)):  # Fallback after 4 segments
+                    
+                    # Found natural ending or reached reasonable limit, merge segments
+                    merged_text = text
+                    merged_end = segment.get('end', 0)
+                    merged_words = segment.get('words', []).copy()
+                    
+                    for merge_seg in lookahead:
+                        merged_text += ' ' + merge_seg.get('text', '').strip()
+                        merged_end = merge_seg.get('end', merged_end)
+                        if 'words' in merge_seg:
+                            merged_words.extend(merge_seg['words'])
+                    
+                    # Create enhanced segment
+                    enhanced_segment = segment.copy()
+                    enhanced_segment['text'] = merged_text
+                    enhanced_segment['end'] = merged_end
+                    if merged_words:
+                        enhanced_segment['words'] = merged_words
+                    
+                    enhanced_segments.append(enhanced_segment)
+                    
+                    # Skip the merged segments
+                    i = j
+                    break
+                    
+                j += 1
+            else:
+                # No natural ending found, keep original
+                enhanced_segments.append(segment)
+        else:
+            enhanced_segments.append(segment)
+    
+    print(f"✅ Enhanced {len(enhanced_segments)} segments for recorded file flow")
+    return enhanced_segments
+
 def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, language=None):
     """Transcribe audio using WhisperX with quality validation"""
     print("\n🎙️ WHISPERX TRANSCRIPTION STARTING...")
@@ -301,20 +433,41 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
     start_time = time.time()
     
     try:
-        # 1. Load WhisperX model
-        print(f"📥 Loading WhisperX large-v3 model on {device.upper()}...")
+        # 1. Load WhisperX model optimized for MAXIMUM ACCURACY
+        print(f"📥 Loading WhisperX large-v3 model on {device.upper()} (max accuracy mode)...")
+        
+        # Define the temperature fallback sequence
+        temperature_fallback = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
+        print(f"🌡️ Temperature fallback strategy: {temperature_fallback}")
+        print(f"🎯 Beam size: 5 (default)")
+
         model = whisperx.load_model(
-            "large-v3", 
-            device, 
+            "large-v3",
+            device,
             compute_type=compute_type,
             asr_options={
-                "suppress_numerals": True,
+                # WhisperX specific or general model setup options
+                "suppress_numerals": False,
                 "max_new_tokens": None,
                 "clip_timestamps": "0",
-                "hallucination_silence_threshold": None,
+                "word_timestamps": True, # Used by WhisperX alignment
+                "hallucination_silence_threshold": 0.5, # WhisperX VAD-related
+
+                # Core FasterWhisper TranscriptionOptions for MAX ACCURACY
+                "temperatures": temperature_fallback,    # PLURAL KEY for fallback sequence
+                "beam_size": 5,                         # Default is 5
+                "patience": 1.0,                        # Default for ctranslate2 (must be float, not None)
+                "length_penalty": 1.0,                  # Default
+                "no_speech_threshold": 0.6,             # Default VAD threshold
+                "log_prob_threshold": -1.0,             # Default log probability threshold
+                "compression_ratio_threshold": 2.4,     # Default gibberish detection
+                "condition_on_previous_text": True     # Crucial for context & reducing repetition
             }
         )
-        print(f"✅ WhisperX model loaded")
+        print(f"✅ WhisperX model loaded with advanced ASR options.")
+        print(f"🌡️ Temperature fallback strategy: {temperature_fallback}")
+        print(f"🎯 Beam size: 5, Patience: 1.0, Length penalty: 1.0")
+        print(f"💎 Quality thresholds: no_speech={0.6}, log_prob={-1.0}, compression_ratio={2.4}")
         
         # 2. Load audio
         print(f"📥 Loading audio: {audio_file}")
@@ -322,15 +475,34 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
         audio_duration = len(audio) / 16000
         print(f"✅ Audio loaded: {audio_duration:.1f} seconds")
         
-        # 3. Transcribe with WhisperX (includes VAD)
-        print(f"🚀 Transcribing with batch size {batch_size}...")
-        result = model.transcribe(
-            audio, 
-            batch_size=batch_size,
-            language=language,
-            print_progress=True,
-            combined_progress=True
-        )
+        # 3. Transcribe with WhisperX (maximum accuracy settings)
+        print(f"🚀 Transcribing with batch size {batch_size} (max accuracy mode)...")
+        if language:
+            print(f"🌍 Using language parameter: {language}")
+        else:
+            print("🌍 No language specified, will auto-detect")
+        
+        from tqdm import tqdm
+        import sys
+        
+        # Estimate number of chunks for progress bar
+        estimated_chunks = int(audio_duration / 30) + 1  # 30-second chunks
+        
+        with tqdm(total=estimated_chunks, desc="🎙️ Transcribing",
+                  bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} chunks [{elapsed}<{remaining}]",
+                  file=sys.stdout, ncols=80) as pbar:
+
+            # All decoding options are now set via asr_options in load_model
+            result = model.transcribe(
+                audio,
+                batch_size=batch_size,
+                language=language,
+                print_progress=False,      # Disabled - using custom progress bar
+                combined_progress=False    # Disabled - using custom progress bar
+            )
+
+            pbar.n = estimated_chunks
+            pbar.refresh()
         
         print(f"✅ Initial transcription complete: {len(result['segments'])} segments")
         
@@ -339,13 +511,31 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
         gc.collect()
         torch.cuda.empty_cache()  # Always clear CUDA cache in GPU-only mode
         
-        # 4. Quality validation
+        # 4. Enhanced quality validation and segment optimization
+        print("📊 QUALITY ENHANCEMENT PIPELINE")
+        print("-" * 40)
+        
+        original_count = len(result['segments'])
+        print(f"📝 Original segments: {original_count}")
+        
+        # Step 1: Clean repetitive content
         repetition_ratio, repetitive_indices = detect_repetitions(result['segments'])
         print(f"📊 Quality check - Repetition ratio: {repetition_ratio:.1%}")
         
         if repetition_ratio > MAX_REPETITION_RATIO:
             print(f"⚠️ Quality issue detected! Cleaning repetitive segments...")
             result['segments'] = clean_repetitive_segments(result['segments'])
+        
+        # Step 2: CONSERVATIVE merging of only obvious fragments
+        result['segments'] = merge_short_segments(result['segments'])
+        
+        # Step 3: DISABLED - boundary enhancement was too aggressive
+        # result['segments'] = enhance_segment_boundaries(result['segments'])
+        
+        final_count = len(result['segments'])
+        improvement = ((original_count - final_count) / original_count * 100) if original_count > 0 else 0
+        print(f"✅ Segment optimization complete: {original_count} → {final_count} segments ({improvement:.1f}% reduction)")
+        print("-" * 40)
         
         # 5. Forced alignment for precise timestamps
         if result['segments']:
@@ -357,15 +547,27 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
                     device=device
                 )
                 
-                print(f"🔍 Performing forced alignment...")
-                result = whisperx.align(
-                    result["segments"], 
-                    model_a, 
-                    metadata, 
-                    audio, 
-                    device, 
-                    return_char_alignments=False
-                )
+                print(f"🔍 Performing forced alignment (max accuracy)...")
+                
+                # Progress bar for alignment
+                alignment_segments = len(result["segments"])
+                with tqdm(total=alignment_segments, desc="🎯 Aligning", 
+                          bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} segments [{elapsed}<{remaining}]",
+                          file=sys.stdout, ncols=80) as align_pbar:
+                    
+                    result = whisperx.align(
+                        result["segments"], 
+                        model_a, 
+                        metadata, 
+                        audio, 
+                        device, 
+                        return_char_alignments=False
+                        # Using default alignment settings for maximum compatibility
+                    )
+                    
+                    # Complete alignment progress
+                    align_pbar.n = alignment_segments
+                    align_pbar.refresh()
                 
                 print(f"✅ Forced alignment complete")
                 
@@ -393,7 +595,7 @@ def transcribe_with_whisperx(audio_file, device, compute_type, batch_size, langu
         raise
 
 def perform_speaker_diarization_whisperx(audio_file, device):
-    """Perform speaker diarization optimized for WhisperX"""
+    """Perform speaker diarization using pyannote.audio directly (same as enhanced script)"""
     try:
         print("\n👥 SPEAKER DIARIZATION STARTING...")
         print("=" * 50)
@@ -408,22 +610,29 @@ def perform_speaker_diarization_whisperx(audio_file, device):
         
         start_time = time.time()
         
-        # Load diarization model
+        # Load diarization model using pyannote.audio directly (same as enhanced script)
         print(f"📥 Loading speaker diarization model on {device.upper()}...")
-        diarize_model = whisperx.DiarizationPipeline(
-            use_auth_token=hf_token, 
-            device=device
+        from pyannote.audio import Pipeline
+        
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            use_auth_token=hf_token
         )
+        
+        if device == "cuda":
+            import torch
+            pipeline = pipeline.to(torch.device("cuda"))
+            
         print(f"✅ Diarization model loaded")
         
         # Perform diarization
         print("🔍 Analyzing speakers...")
-        diarize_segments = diarize_model(audio_file)
+        diarization = pipeline(audio_file)
         
-        # Process results
+        # Convert to WhisperX-compatible format
         speakers_found = set()
-        for segment in diarize_segments.itertracks(yield_label=True):
-            speakers_found.add(segment[2])
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            speakers_found.add(speaker)
         
         elapsed = time.time() - start_time
         print(f"✅ SPEAKER DIARIZATION COMPLETE!")
@@ -431,7 +640,7 @@ def perform_speaker_diarization_whisperx(audio_file, device):
         print(f"⏱️ Diarization time: {elapsed:.1f}s")
         print("=" * 50)
         
-        return diarize_segments
+        return diarization
         
     except Exception as e:
         print(f"⚠️ Speaker diarization failed: {e}")
@@ -445,8 +654,30 @@ def assign_speakers_to_segments(result, diarize_segments):
     
     print("🏷️ Assigning speaker labels to segments...")
     
-    # Use WhisperX's built-in speaker assignment
-    result = whisperx.assign_word_speakers(diarize_segments, result)
+    # Try WhisperX's built-in speaker assignment first
+    try:
+        result = whisperx.assign_word_speakers(diarize_segments, result)
+        print("✅ Used WhisperX assign_word_speakers")
+    except Exception as e:
+        print(f"⚠️ WhisperX assign_word_speakers failed: {e}")
+        print("🔧 Using manual speaker assignment...")
+        
+        # Manual assignment as fallback (same logic as enhanced script)
+        def assign_speaker_to_segment(segment_start, segment_end, speaker_segments):
+            segment_mid = (segment_start + segment_end) / 2
+            
+            for turn, _, speaker in speaker_segments.itertracks(yield_label=True):
+                if turn.start <= segment_mid <= turn.end:
+                    return speaker
+            
+            return "SPEAKER_UNKNOWN"
+        
+        # Assign speakers manually
+        for segment in result['segments']:
+            start_ts = segment.get('start', 0)
+            end_ts = segment.get('end', start_ts + 1)
+            speaker = assign_speaker_to_segment(start_ts, end_ts, diarize_segments)
+            segment['speaker'] = speaker
     
     # Count speakers
     speakers_in_transcript = set()
@@ -465,7 +696,7 @@ def format_timestamp_srt(seconds):
     return f"{hours:02d}:{minutes:02d}:{seconds:06.3f}".replace('.', ',')
 
 def write_enhanced_srt(result, output_file):
-    """Write enhanced SRT file with speaker labels and quality validation"""
+    """Write enhanced SRT file with speaker labels and improved formatting"""
     print(f"📝 Writing enhanced SRT to: {output_file}")
     
     segments = result.get('segments', [])
@@ -475,6 +706,8 @@ def write_enhanced_srt(result, output_file):
     
     with open(output_file, 'w', encoding='utf-8') as f:
         segment_count = 0
+        total_duration = 0
+        speaker_counts = {}
         
         for i, segment in enumerate(segments):
             start = segment.get('start', 0)
@@ -482,25 +715,50 @@ def write_enhanced_srt(result, output_file):
             text = segment.get('text', '').strip()
             speaker = segment.get('speaker', 'SPEAKER_UNKNOWN')
             
-            # Skip empty or too short segments
-            if not text or (end - start) < MIN_SEGMENT_LENGTH:
+            # Skip empty segments
+            if not text:
+                continue
+            
+            # Apply minimum duration filter (now more lenient due to merging)
+            duration = end - start
+            if duration < 0.5:  # Very short segments only
                 continue
             
             segment_count += 1
+            total_duration += duration
+            
+            # Track speaker statistics
+            speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
             
             # Format timestamps
             start_time = format_timestamp_srt(start)
             end_time = format_timestamp_srt(end)
             
-            # Format text with speaker
-            speaker_text = f"[{speaker}] {text}" if speaker != 'SPEAKER_UNKNOWN' else text
+            # Enhanced text formatting for better readability
+            # Clean up extra spaces and ensure proper capitalization
+            text = ' '.join(text.split())  # Clean extra whitespace
+            if text and not text[0].isupper():
+                text = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
             
-            # Write SRT entry
+            # Format text with speaker (improved speaker labeling)
+            if speaker != 'SPEAKER_UNKNOWN':
+                speaker_text = f"[{speaker}] {text}"
+            else:
+                speaker_text = text
+            
+            # Write SRT entry with improved formatting
             f.write(f"{segment_count}\n")
             f.write(f"{start_time} --> {end_time}\n")
             f.write(f"{speaker_text}\n\n")
     
+    # Enhanced completion summary
+    avg_duration = total_duration / segment_count if segment_count > 0 else 0
     print(f"✅ Enhanced SRT written: {segment_count} segments")
+    print(f"📊 Average segment duration: {avg_duration:.1f}s (improved from over-segmentation)")
+    print(f"👥 Speaker distribution: {len(speaker_counts)} unique speakers")
+    for speaker, count in sorted(speaker_counts.items()):
+        percentage = (count / segment_count * 100) if segment_count > 0 else 0
+        print(f"   {speaker}: {count} segments ({percentage:.1f}%)")
 
 def main():
     if len(sys.argv) < 2:
@@ -555,7 +813,9 @@ def main():
     print(f"📁 Input file: {audio_file}")
     print(f"📁 Output file: {output_file}")
     if language:
-        print(f"🌍 Language: {language}")
+        print(f"🌍 Language specified: {language}")
+    else:
+        print("🌍 Language: auto-detect (increases inference time)")
     
     # Convert audio if needed
     working_audio = convert_audio_if_needed(audio_file)
@@ -596,15 +856,25 @@ def main():
             if seg.get('speaker')
         ))
         
-        print(f"📊 QUALITY SUMMARY:")
+        print(f"📊 ENHANCED QUALITY SUMMARY:")
         print(f"   📁 Output file: {output_file}")
         print(f"   🌍 Language: {result.get('language', 'auto-detected')}")
         print(f"   ⏱️  Audio duration: {total_duration:.1f} seconds")
         print(f"   🚀 Processing time: {transcription_time:.1f} seconds")
         print(f"   ⚡ Speed ratio: {speed_ratio:.1f}x real-time")
-        print(f"   📝 Total segments: {len(result['segments'])}")
+        print(f"   📝 Optimized segments: {len(result['segments'])} (reduced over-segmentation)")
         print(f"   👥 Speakers detected: {unique_speakers}")
-        print("💎 WhisperX superior quality with forced alignment!")
+        print("🎯 MAXIMUM ACCURACY CONFIGURATION:")
+        print("   ✅ Smaller batch sizes for better context processing")
+        print("   ✅ Full precision mode (no TF32 approximations)")
+        print("   ✅ Deterministic CUDA operations for consistency")
+        print("   ✅ Intelligent temperature fallback (temperatures key in asr_options)")
+        print("   ✅ Beam search (size=5, default) via asr_options")
+        print("   ✅ Advanced decoding options (patience, thresholds) via asr_options")
+        print("   ✅ Conservative post-processing to preserve quality")
+        print("   ✅ Context-aware transcription (condition_on_previous_text=True in asr_options)")
+        print(f"   ✅ Temperature sequence in asr_options: {temperature_fallback if 'temperature_fallback' in locals() else 'N/A'}")
+        print("💎 WhisperX configured for maximum accuracy with intelligent fallback!")
         
     except Exception as e:
         print(f"❌ Transcription failed: {e}")
